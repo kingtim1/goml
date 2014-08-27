@@ -10,6 +10,7 @@
 package goml
 
 import (
+	"fmt"
 	mat "github.com/skelterjohn/go.matrix"
 )
 
@@ -75,13 +76,13 @@ type LinearFunction struct {
 }
 
 func (f LinearFunction) Eval(instance mat.MatrixRO) (float64, error) {
-	if instance.Cols() != InputDims() {
-		return 0, "Instance has wrong dimensions."
+	if uint(instance.Cols()) != f.InputDims() {
+		return 0, fmt.Errorf("Instance has wrong dimensions.")
 	}
 	value, err := f.Weights.Times(instance)
 	return value.Get(0, 0), err
 }
 
 func (f LinearFunction) InputDims() uint {
-	return f.Weights.Rows()
+	return uint(f.Weights.Rows())
 }
