@@ -20,8 +20,8 @@ import (
 type Function interface {
 
 	/*
-		Eval evalutes this function at the point specified by the given vector
-		and returns a scalar value.
+		Predict evalutes this function at the point specified by the given
+		vector and returns a scalar value.
 
 		Input
 		=====
@@ -31,7 +31,7 @@ type Function interface {
 		=======
 		a scalar value or an error
 	*/
-	Eval(instance mat.MatrixRO) (float64, error)
+	Predict(instance mat.MatrixRO) (float64, error)
 
 	/*
 		InputDims returns the number of dimensions of a valid input vector.
@@ -40,7 +40,7 @@ type Function interface {
 		=======
 		the number of dimensions of a valid input vector
 	*/
-	InputDims() uint
+	InputDims() int
 }
 
 /*
@@ -52,7 +52,8 @@ type FunctionApproximator interface {
 
 	/*
 		Fit fits this function approximator to the training data specified by
-		the matrix x and the vector y.
+		the matrix x and the vector y. Generally this method needs to be called
+		before Predict() can be called.
 
 		Input
 		=====
@@ -72,17 +73,24 @@ type FunctionApproximator interface {
  by a weight vector.
 */
 type LinearFunction struct {
-	Weights mat.MatrixRO
+	Weights mat.DenseMatrix
 }
 
-func (f LinearFunction) Eval(instance mat.MatrixRO) (float64, error) {
-	if uint(instance.Cols()) != f.InputDims() {
-		return 0, fmt.Errorf("Instance has wrong dimensions.")
+func (f LinearFunction) Predict(x mat.MatrixRO) (float64, error) {
+	if x.Cols() != f.InputDims() {
+		return 0, fmt.Errorf("x has %d columns. Expected %d.", x.Cols(), f.InputDims())
 	}
-	value, err := f.Weights.Times(instance)
+	value, err := x.Times(&f.Weights)
 	return value.Get(0, 0), err
 }
 
-func (f LinearFunction) InputDims() uint {
-	return uint(f.Weights.Rows())
+func (f LinearFunction) PredictM(x mat.MatrixRO) (mat.MatrixRO, error) {
+	if x.Cols() != f.InputDims() {
+		return nil, fmt.Errorf("x has %d columns. Expected %d.", x.Cols(), f.InputDims())
+	}
+	return x.Times(&f.Weights)
+}
+
+func (f LinearFunction) InputDims() int {
+	return f.Weights.Rows()
 }
