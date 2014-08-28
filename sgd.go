@@ -124,7 +124,7 @@ func (self *SGD) Fit(x mat.MatrixRO, y mat.MatrixRO) error {
 	for i := 0; i < self.NumIterations; i++ {
 		index := rand.Intn(n)
 		xrow := dx.GetRowVector(index)
-		xrowb := self.addBiasToVector(xrow)
+		xrowb := self.addBiasToMatrix(xrow)
 		yhat, err := self.f.Predict(xrowb)
 		if err != nil {
 			return fmt.Errorf("Error while predicting with internal linear model. %v", err)
@@ -162,10 +162,12 @@ func (self *SGD) Fit(x mat.MatrixRO, y mat.MatrixRO) error {
 	return nil
 }
 
-func (self SGD) addBiasToVector(x mat.MatrixRO) *mat.DenseMatrix {
-	xb := mat.Ones(1, self.InputDims()+1)
-	for i := 0; i < self.InputDims(); i++ {
-		xb.Set(0, i, x.Get(0, i))
+func (self SGD) addBiasToMatrix(x mat.MatrixRO) *mat.DenseMatrix {
+	xb := mat.Ones(x.Rows(), self.InputDims()+1)
+	for r := 0; r < x.Rows(); r++ {
+		for i := 0; i < self.InputDims(); i++ {
+			xb.Set(r, i, x.Get(r, i))
+		}
 	}
 	return xb
 }
@@ -176,11 +178,25 @@ func (self SGD) Predict(x mat.MatrixRO) (float64, error) {
 			return 0, fmt.Errorf("x has %d columns. Expected %d.", x.Cols(), self.InputDims())
 		}
 		// Add a bias to the input vector
-		xb := self.addBiasToVector(x)
+		xb := self.addBiasToMatrix(x)
 		// Make a prediction
 		return self.f.Predict(xb)
 	} else {
-		return 0, fmt.Errorf("Cannot predict before running the Fit method.")
+		return 0, fmt.Errorf("Cannot predict before running Fit().")
+	}
+}
+
+func (self SGD) PredictM(x mat.MatrixRO) (mat.MatrixRO, error) {
+	if self.f != nil {
+		if x.Cols() != self.InputDims() {
+			return nil, fmt.Errorf("x has %d columns. Expected %d.", x.Cols(), self.InputDims())
+		}
+		// Add biases to the input matrix
+		xb := self.addBiasToMatrix(x)
+		// Make predictions for each row
+		return self.f.PredictM(xb)
+	} else {
+		return nil, fmt.Errorf("Cannot predict before running Fit().")
 	}
 }
 

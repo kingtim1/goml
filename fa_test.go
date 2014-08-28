@@ -10,6 +10,7 @@ package goml
 
 import (
 	mat "github.com/skelterjohn/go.matrix"
+	"math"
 	"math/rand"
 	"testing"
 )
@@ -19,7 +20,7 @@ const (
 )
 
 /*
-LinearFitAndReturnError is used to test linear FunctionApproximators. It
+LinearFitAndReturnMSE is used to test linear FunctionApproximators. It
 generates a collection of samples according to a 1-d linear function, fits the
 function approximator with the training samples, and then returns the Mean
 Squared Error (MSE). The training set is purposefully equal to the test set so
@@ -37,7 +38,7 @@ Returns
 =======
 the MSE of the fa on samples from the linear function
 */
-func LinearFitAndReturnError(fa FunctionApproximator, t *testing.T) float64 {
+func LinearFitAndReturnMSE(fa FunctionApproximator, t *testing.T) float64 {
 	n := 100
 	x := mat.Zeros(n, 1)
 	y := mat.Zeros(n, 1)
@@ -53,19 +54,33 @@ func LinearFitAndReturnError(fa FunctionApproximator, t *testing.T) float64 {
 	if err != nil {
 		t.Error(err)
 	}
-	//t.Log("(Rows=", x.Rows(), "Cols=", x.Cols(), ")")
+
+	// Test bulk prediction
+	yhatM, err := fa.PredictM(x)
+	if err != nil {
+		t.Error(err)
+	}
+
+	sqErrM := 0.0
+	diffM, err := y.Minus(yhatM)
+	if err != nil {
+		t.Error(err)
+	}
 
 	sqErr := 0.0
 	for i := 0; i < n; i++ {
+		sqErrM += diffM.Get(i, 0) * diffM.Get(i, 0)
+
 		v, err := fa.Predict(x.GetRowVector(i))
 		if err != nil {
-			//t.Error(err)
+			t.Error(err)
 		}
 		diff := y.Get(i, 0) - v
 		sqErr += diff * diff
 	}
 
-	return sqErr / float64(n)
+	mse := math.Max(sqErr, sqErrM) / float64(n)
+	return mse
 }
 
 /*
@@ -76,7 +91,7 @@ func TestSGD(t *testing.T) {
 	if err != nil {
 		t.Error("Error while constructing SGD instance.", err)
 	}
-	mse := LinearFitAndReturnError(sgd, t)
+	mse := LinearFitAndReturnMSE(sgd, t)
 	t.Log(sgd.Weights())
 	if mse > LINEAR_NOISE {
 		t.Error("MSE (", mse, ") is too large.")

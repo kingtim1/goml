@@ -34,6 +34,19 @@ type Function interface {
 	Predict(instance mat.MatrixRO) (float64, error)
 
 	/*
+		PredictM evaluates each row of the specified matrix.
+
+		Input
+		=====
+		instances : a matrix where each row corresponds to an input vector
+
+		Returns
+		=======
+		a vector containing one prediction for each row vector in instances
+	*/
+	PredictM(instances mat.MatrixRO) (mat.MatrixRO, error)
+
+	/*
 		InputDims returns the number of dimensions of a valid input vector.
 
 		Returns
