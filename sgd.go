@@ -47,6 +47,11 @@ type SGD struct {
 	inputDims int
 
 	/*
+		The activation function to apply.
+	*/
+	afunc ActivationFunction
+
+	/*
 		A LinearFunction.
 	*/
 	f *LinearFunction
@@ -61,12 +66,13 @@ penaltyType : the type of regularization penalty to user during fitting (either 
 lambda : the regularization parameter (should >= 0)
 numIterations : the number of iterations to run during fitting. One iteration corresponds to updating with a single sample.
 learningRate : the constant learning rate parameter to use during training
+afunc : the activation function to apply to output (nil is interpreted as the identity function)
 
 Returns
 =======
 a pointer to a new (untrained) SGD instance or an error
 */
-func NewSGD(penaltyType int, lambda float64, numIterations int, learningRate float64) (*SGD, error) {
+func NewSGD(penaltyType int, lambda float64, numIterations int, learningRate float64, afunc ActivationFunction) (*SGD, error) {
 	var f *SGD = new(SGD)
 	if penaltyType != L1_PENALTY && penaltyType != L2_PENALTY {
 		return nil, fmt.Errorf("Invalid regularization penalty type. Valid types are L1_PENALTY or L2_PENALTY.")
@@ -81,6 +87,8 @@ func NewSGD(penaltyType int, lambda float64, numIterations int, learningRate flo
 	}
 	f.NumIterations = numIterations
 	f.LearningRate = learningRate
+
+	f.afunc = afunc
 
 	f.inputDims = 0
 	f.f = nil
@@ -97,7 +105,7 @@ Returns
 a new instance of *SGD with the same parameters as this instance
 */
 func (self *SGD) NewCopy() (*SGD, error) {
-	return NewSGD(self.PenaltyType, self.Lambda, self.NumIterations, self.LearningRate)
+	return NewSGD(self.PenaltyType, self.Lambda, self.NumIterations, self.LearningRate, self.afunc)
 }
 
 func (self *SGD) Fit(x mat.MatrixRO, y mat.MatrixRO) error {
@@ -113,11 +121,16 @@ func (self *SGD) Fit(x mat.MatrixRO, y mat.MatrixRO) error {
 	// Get a dense version of the input matrix
 	dx := x.DenseMatrix()
 
+	// If there is no LinearModel yet, then we add one.
 	if self.f == nil {
 		self.inputDims = x.Cols()
 		self.f = new(LinearFunction)
 		self.f.Weights = *mat.Zeros(self.inputDims+1, 1)
+		self.f.AFunc = self.afunc
 	} else if self.inputDims != x.Cols() {
+		// If there is an existing linear model, then we only train on
+		// additional samples if they match the dimensionality of the previous
+		// training data.
 		return fmt.Errorf("The number of columns in matrix x does not match the dimension of previous training data. Please construct a new SGD instance.")
 	}
 
@@ -130,6 +143,18 @@ func (self *SGD) Fit(x mat.MatrixRO, y mat.MatrixRO) error {
 			return fmt.Errorf("Error while predicting with internal linear model. %v", err)
 		}
 
+		// Compute the activation function's derivative
+		yhatPrime := 0.0
+		if self.afunc != nil {
+			yNoAct, err := xrowb.Times(&self.f.Weights)
+			if err != nil {
+				return fmt.Errorf("Error while predicting before applying the activation function. %v", err)
+			}
+			yhatPrime = self.afunc.Deriv(yNoAct.Get(0, 0))
+		} else {
+			yhatPrime = 1
+		}
+
 		diff := y.Get(index, 0) - yhat
 		for j := 0; j < self.inputDims+1; j++ {
 			// Get the old weight value
@@ -137,10 +162,10 @@ func (self *SGD) Fit(x mat.MatrixRO, y mat.MatrixRO) error {
 			// Calculate the gradient of the squared error
 			grad := 0.0
 			if j < self.inputDims {
-				grad = (diff * -xrow.Get(0, j))
+				grad = (diff * yhatPrime * -xrow.Get(0, j))
 			} else {
 				// Gradient for the bias
-				grad = -diff
+				grad = -diff * yhatPrime
 			}
 
 			// Calculate the gradient of the regularization penalty

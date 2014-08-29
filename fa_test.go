@@ -46,7 +46,7 @@ func LinearFitAndReturnMSE(fa FunctionApproximator, t *testing.T) float64 {
 		fi := float64(i)
 		fn := float64(n)
 		fx := fi / fn
-		fy := (2.0*fx - 4.5) + rand.NormFloat64()*LINEAR_NOISE
+		fy := (0.25*fx - 0.5) + rand.NormFloat64()*LINEAR_NOISE
 		x.Set(i, 0, fx)
 		y.Set(i, 0, fy)
 	}
@@ -83,17 +83,41 @@ func LinearFitAndReturnMSE(fa FunctionApproximator, t *testing.T) float64 {
 	return mse
 }
 
+type Tanh struct{}
+
+func (self Tanh) Eval(x float64) float64 {
+	return math.Tanh(x)
+}
+func (self Tanh) Deriv(x float64) float64 {
+	// 1 - Math.pow(Math.tanh(x),2)
+	return 1 - math.Pow(math.Tanh(x), 2)
+}
+
 /*
 TestSGD creates an SGD instance and tests whether it can fit a linear function.
 */
 func TestSGD(t *testing.T) {
-	sgd, err := NewSGD(L2_PENALTY, 0.0, 1000, 0.1)
+	lambda := 0.01
+	numIterations := 1000
+	learningRate := 0.1
+	afunc := new(Tanh)
+	sgd, err := NewSGD(L2_PENALTY, lambda, numIterations, learningRate, afunc)
 	if err != nil {
-		t.Error("Error while constructing SGD instance.", err)
+		t.Error("Error while constructing SGD instance with Tanh activation function.", err)
 	}
 	mse := LinearFitAndReturnMSE(sgd, t)
 	t.Log(sgd.Weights())
 	if mse > LINEAR_NOISE {
-		t.Error("MSE (", mse, ") is too large.")
+		t.Error("MSE (", mse, ") is too large (w/Tanh activation function).")
+	}
+
+	sgd, err = NewSGD(L2_PENALTY, lambda, numIterations, learningRate, nil)
+	if err != nil {
+		t.Error("Error while constructing SGD instance without activation function.", err)
+	}
+	mse = LinearFitAndReturnMSE(sgd, t)
+	t.Log(sgd.Weights())
+	if mse > LINEAR_NOISE {
+		t.Error("MSE (", mse, ") is too large (w/nil activation function).")
 	}
 }
